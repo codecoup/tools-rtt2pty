@@ -132,7 +132,7 @@ static int configure_rtt(void)
             continue;
         }
 
-        if (rtt_info.size > 0 && !strcmp("ble_monitor", rtt_info.name)) {
+        if (rtt_info.size > 0 && !strcmp("monitor", rtt_info.name)) {
             break;
         }
     }
