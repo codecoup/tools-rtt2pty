@@ -9,6 +9,7 @@
 #include <getopt.h>
 
 /* libjlinkarm.so exports */
+static int (* jlink_emu_selectbyusbsn) (unsigned sn);
 static int (* jlink_open) (void);
 static int (* jlink_execcommand) (char *in, char *out, int size);
 static int (* jlink_tif_select) (int);
@@ -29,6 +30,7 @@ static const struct option options[] = {
     { }
 };
 
+static unsigned opt_sn = 0;
 static const char *opt_device = "nrf52";
 static int opt_if = 1; // SWD
 static unsigned opt_speed = 4000;
@@ -45,6 +47,7 @@ static int load_jlinkarm(void)
         return -1;
     }
 
+    jlink_emu_selectbyusbsn = dlsym(so, "JLINK_EMU_SelectByUSBSN");
     jlink_open = dlsym(so, "JLINK_Open");
     jlink_execcommand = dlsym(so, "JLINK_ExecCommand");
     jlink_tif_select = dlsym(so, "JLINK_TIF_Select");
@@ -55,10 +58,10 @@ static int load_jlinkarm(void)
     jlink_rtterminal_control = dlsym(so, "JLINK_RTTERMINAL_Control");
     jlink_rtterminal_read = dlsym(so, "JLINK_RTTERMINAL_Read");
 
-    if (!jlink_open || !jlink_execcommand || !jlink_tif_select ||
-            !jlink_setspeed || !jlink_connect || !jlink_getsn ||
-            !jlink_emu_getproductname || !jlink_rtterminal_control ||
-            !jlink_rtterminal_read) {
+    if (!jlink_emu_selectbyusbsn || !jlink_open || !jlink_execcommand ||
+            !jlink_tif_select || !jlink_setspeed || !jlink_connect ||
+            !jlink_getsn || !jlink_emu_getproductname ||
+            !jlink_rtterminal_control || !jlink_rtterminal_read) {
         fprintf(stderr, "Failed to initialize jlinkarm\n");
         return -1;
     }
@@ -70,6 +73,13 @@ static int connect_jlink(void)
 {
     unsigned sn;
     char buf[1024];
+
+    if (opt_sn) {
+        if (!jlink_emu_selectbyusbsn(opt_sn)) {
+            fprintf(stderr, "Failed to select emu\n");
+            return -1;
+        }
+    }
 
     if (jlink_open()) {
         fprintf(stderr, "Failed to open J-Link\n");
@@ -208,7 +218,7 @@ int main(int argc, char **argv)
              // TODO: not yet supported...
              break;
          case 's':
-             // TODO: not yet supported...
+             opt_sn = atoi(optarg);
              break;
          case 'S':
              opt_speed = atoi(optarg);
