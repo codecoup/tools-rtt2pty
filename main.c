@@ -6,8 +6,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dlfcn.h>
-
-#define JLINKARM_SO_NAME    "/opt/SEGGER/JLink/libjlinkarm.so"
+#include <getopt.h>
 
 /* libjlinkarm.so exports */
 static int (* jlink_open) (void);
@@ -20,11 +19,27 @@ static void (* jlink_emu_getproductname) (char *out, int size);
 static int (*jlink_rtterminal_control) (int cmd, void *data);
 static int (*jlink_rtterminal_read) (int cmd, char *buf, int size);
 
+static const struct option options[] = {
+    { "device",   required_argument, NULL, 'd' },
+    { "if",       required_argument, NULL, 'i' },
+    { "sn",       required_argument, NULL, 's' },
+    { "speed",    required_argument, NULL, 'S' },
+    { "buffer",   required_argument, NULL, 'b' },
+    { "jlinkarm", required_argument, NULL, 'j' },
+    { }
+};
+
+static const char *opt_device = "nrf52";
+static int opt_if = 1; // SWD
+static unsigned opt_speed = 4000;
+static const char *opt_buffer = "monitor";
+static const char *opt_jlinkarm = "/opt/SEGGER/JLink/libjlinkarm.so";
+
 static int load_jlinkarm(void)
 {
     void *so;
 
-    so = dlopen(JLINKARM_SO_NAME, RTLD_LAZY);
+    so = dlopen(opt_jlinkarm, RTLD_LAZY);
     if (!so) {
         fprintf(stderr, "Failed to open jlinkarm (%s)\n", dlerror());
         return -1;
@@ -61,17 +76,18 @@ static int connect_jlink(void)
         return -1;
     }
 
-    if (jlink_execcommand("device=nrf52", NULL, 0)) {
+    snprintf(buf, sizeof(buf), "device=%s", opt_device);
+    if (jlink_execcommand(buf, NULL, 0)) {
         fprintf(stderr, "Failed to setup J-Link\n");
         return -1;
     }
 
-    if (jlink_tif_select(1)) {
+    if (jlink_tif_select(opt_if)) {
         fprintf(stderr, "Failed to setup J-Link\n");
         return -1;
     }
 
-    jlink_setspeed(4000);
+    jlink_setspeed(opt_speed);
 
     if (jlink_connect()) {
         fprintf(stderr, "Failed to connect J-Link\n");
@@ -132,7 +148,7 @@ static int configure_rtt(void)
             continue;
         }
 
-        if (rtt_info.size > 0 && !strcmp("monitor", rtt_info.name)) {
+        if (rtt_info.size > 0 && !strcmp(opt_buffer, rtt_info.name)) {
             break;
         }
     }
@@ -176,6 +192,37 @@ int main(int argc, char **argv)
 {
     int pfd;
     int idx;
+
+    for (;;) {
+         int opt;
+
+         opt = getopt_long(argc, argv, "d:i:s:S:b:j:", options, NULL);
+         if (opt < 0)
+             break;
+
+         switch (opt) {
+         case 'd':
+             opt_device = optarg;
+             break;
+         case 'i':
+             // TODO: not yet supported...
+             break;
+         case 's':
+             // TODO: not yet supported...
+             break;
+         case 'S':
+             opt_speed = atoi(optarg);
+             break;
+         case 'b':
+             opt_buffer = optarg;
+             break;
+         case 'j':
+             opt_jlinkarm = optarg;
+             break;
+         default:
+             return EXIT_FAILURE;
+         }
+    }
 
     if (load_jlinkarm() < 0) {
         return EXIT_FAILURE;
