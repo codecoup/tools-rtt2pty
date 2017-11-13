@@ -55,13 +55,48 @@ static const char *opt_device = "nrf52";
 static int opt_if = 1; // SWD
 static unsigned opt_speed = 4000;
 static const char *opt_buffer = "monitor";
-static const char *opt_jlinkarm = "/opt/SEGGER/JLink/libjlinkarm.so";
+static const char *opt_jlinkarm = NULL;
+
+static void *try_dlopen_jlinkarm(void)
+{
+    static const char *dir[] = {
+            "/usr/bin",
+            "/opt/SEGGER/JLink",
+    };
+    static const char *file[] = {
+            "libjlinkarm.so",
+            "libjlinkarm.so.6",
+    };
+    char fname[100];
+    void *so = NULL;
+    int i, j;
+
+    for (i = 0; i < sizeof(dir) / sizeof(dir[0]); i++) {
+        for (j = 0; j < sizeof(file) / sizeof(file[0]); j++) {
+            snprintf(fname, sizeof(fname), "%s/%s", dir[i], file[j]);
+            fname[sizeof(fname) - 1] = '\0';
+
+            so = dlopen(fname, RTLD_LAZY);
+            if (so) {
+                printf("Using jlinkarm found at %s\n", fname);
+                break;
+            }
+        }
+    }
+
+    return so;
+}
 
 static int load_jlinkarm(void)
 {
     void *so;
 
-    so = dlopen(opt_jlinkarm, RTLD_LAZY);
+    if (opt_jlinkarm) {
+        so = dlopen(opt_jlinkarm, RTLD_LAZY);
+    } else {
+        so = try_dlopen_jlinkarm();
+    }
+
     if (!so) {
         fprintf(stderr, "Failed to open jlinkarm (%s)\n", dlerror());
         return -1;
