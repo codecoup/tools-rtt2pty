@@ -60,6 +60,7 @@ static const struct option options[] = {
 };
 
 static unsigned opt_sn = 0;
+static const char *opt_address = NULL;
 static const char *opt_device = "nrf52";
 static int opt_if = 1; // SWD
 static unsigned opt_speed = 4000;
@@ -191,6 +192,28 @@ static int configure_rtt(void)
 
     int up_count;
     int idx;
+    char *range_size;
+    char cmd[128];
+
+    if (opt_address && strlen(opt_address)) {
+        range_size = strchr(opt_address, ',');
+        if (range_size) {
+            *range_size++ = '\0';
+            if (strlen(range_size) == 0) {
+                range_size = "0x1000";
+            }
+            snprintf(cmd, sizeof(cmd), "SetRTTSearchRanges %s %s", opt_address, range_size);
+        } else {
+            snprintf(cmd, sizeof(cmd), "SetRTTAddr %s", opt_address);
+        }
+
+        cmd[sizeof(cmd) - 1] = '\0';
+
+        if (jlink_execcommand(cmd, NULL, 0)) {
+            fprintf(stderr, "Warning: failed to set RTT control block search range\n");
+            return -1;
+        }
+    }
 
     if (jlink_rtterminal_control(RTT_CONTROL_START, NULL)) {
         fprintf(stderr, "Failed to initialize RTT\n");
@@ -267,11 +290,14 @@ int main(int argc, char **argv)
     for (;;) {
          int opt;
 
-         opt = getopt_long(argc, argv, "d:i:s:S:b:j:", options, NULL);
+         opt = getopt_long(argc, argv, "a:d:i:s:S:b:j:", options, NULL);
          if (opt < 0)
              break;
 
          switch (opt) {
+         case 'a':
+             opt_address = optarg;
+             break;
          case 'd':
              opt_device = optarg;
              break;
