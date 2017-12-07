@@ -28,6 +28,15 @@
 #include <dlfcn.h>
 #include <getopt.h>
 
+#define RTT_CONTROL_START           0
+#define RTT_CONTROL_STOP            1
+#define RTT_CONTROL_GET_DESC        2
+#define RTT_CONTROL_GET_NUM_BUF     3
+#define RTT_CONTROL_GET_STAT        4
+
+#define RTT_DIRECTION_UP            0
+#define RTT_DIRECTION_DOWN          1
+
 /* libjlinkarm.so exports */
 static int (* jlink_emu_selectbyusbsn) (unsigned sn);
 static int (* jlink_open) (void);
@@ -171,10 +180,7 @@ static int connect_jlink(void)
 
 static int configure_rtt(void)
 {
-    struct {
-        uint32_t address;
-        uint32_t dummy[3];
-    } rtt_start = { };
+    int rtt_direction;
     struct {
         uint32_t index;
         uint32_t dummy;
@@ -186,7 +192,7 @@ static int configure_rtt(void)
     int up_count;
     int idx;
 
-    if (jlink_rtterminal_control(0, NULL)) {
+    if (jlink_rtterminal_control(RTT_CONTROL_START, NULL)) {
         fprintf(stderr, "Failed to initialize RTT\n");
         return -1;
     }
@@ -195,8 +201,8 @@ static int configure_rtt(void)
 
     do {
         usleep(100);
-        rtt_start.address = 0;
-        up_count = jlink_rtterminal_control(3, &rtt_start);
+        rtt_direction = RTT_DIRECTION_UP;
+        up_count = jlink_rtterminal_control(RTT_CONTROL_GET_NUM_BUF, &rtt_direction);
     } while (up_count < 0);
 
     printf("Found %d up-buffers.\n", up_count);
@@ -207,7 +213,7 @@ static int configure_rtt(void)
         memset(&rtt_info, 0, sizeof(rtt_info));
         rtt_info.index = idx;
 
-        rc = jlink_rtterminal_control(2, &rtt_info);
+        rc = jlink_rtterminal_control(RTT_CONTROL_GET_DESC, &rtt_info);
         if (rc) {
             fprintf(stderr, "Failed to get information for up-buffer #%d\n", up_count);
             continue;
