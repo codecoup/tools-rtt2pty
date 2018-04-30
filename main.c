@@ -343,7 +343,7 @@ int main(int argc, char **argv)
         char buf[4096];
         int num;
 
-        num = jlink_rtterminal_read(1, buf, sizeof(buf));
+        num = jlink_rtterminal_read(idx, buf, sizeof(buf));
         if (num > 0) {
             write(pfd, buf, num);
         } else {
