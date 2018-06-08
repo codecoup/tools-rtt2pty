@@ -27,6 +27,8 @@
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <getopt.h>
+#include <termios.h>
+#include <sys/select.h>
 
 #define RTT_CONTROL_START           0
 #define RTT_CONTROL_STOP            1
@@ -56,6 +58,7 @@ static unsigned (* jlink_getsn) (void);
 static void (* jlink_emu_getproductname) (char *out, int size);
 static int (*jlink_rtterminal_control) (int cmd, void *data);
 static int (*jlink_rtterminal_read) (int cmd, char *buf, int size);
+static int (*jlink_rtterminal_write) (int cmd, char *buf, int size);
 
 static const struct option options[] = {
     { "device",   required_argument, NULL, 'd' },
@@ -63,6 +66,7 @@ static const struct option options[] = {
     { "sn",       required_argument, NULL, 's' },
     { "speed",    required_argument, NULL, 'S' },
     { "buffer",   required_argument, NULL, 'b' },
+    { "bidir",    required_argument, NULL, '2' },
     { "jlinkarm", required_argument, NULL, 'j' },
     { }
 };
@@ -73,6 +77,7 @@ static const char *opt_device = "nrf52";
 static int opt_if = 1; // SWD
 static unsigned opt_speed = 4000;
 static const char *opt_buffer = "monitor";
+static int opt_bidir = 0;
 static const char *opt_jlinkarm = NULL;
 
 static void *try_dlopen_jlinkarm(void)
@@ -130,11 +135,13 @@ static int load_jlinkarm(void)
     jlink_emu_getproductname = dlsym(so, "JLINK_EMU_GetProductName");
     jlink_rtterminal_control = dlsym(so, "JLINK_RTTERMINAL_Control");
     jlink_rtterminal_read = dlsym(so, "JLINK_RTTERMINAL_Read");
+    jlink_rtterminal_write = dlsym(so, "JLINK_RTTERMINAL_Write");
 
     if (!jlink_emu_selectbyusbsn || !jlink_open || !jlink_execcommand ||
             !jlink_tif_select || !jlink_setspeed || !jlink_connect ||
             !jlink_getsn || !jlink_emu_getproductname ||
-            !jlink_rtterminal_control || !jlink_rtterminal_read) {
+            !jlink_rtterminal_control || !jlink_rtterminal_read ||
+            !jlink_rtterminal_write) {
         fprintf(stderr, "Failed to initialize jlinkarm\n");
         return -1;
     }
@@ -221,7 +228,7 @@ static int find_buffer(const char *name, int direction, struct rtt_desc *desc)
     return index;
 }
 
-static int configure_rtt(void)
+static int configure_rtt(int *index_up, int *index_down)
 {
     int index;
     struct rtt_desc desc;
@@ -258,21 +265,46 @@ static int configure_rtt(void)
     index = find_buffer(opt_buffer, RTT_DIRECTION_UP, &desc);
     if (index < 0) {
         fprintf(stderr, "Failed to find matching up-buffer\n");
+        return -1;
     } else {
-        printf("Using buffer #%d (size=%d)\n", index, desc.size);
+        printf("Using up-buffer #%d (size=%d)\n", index, desc.size);
+        *index_up = index;
     }
 
-    return index;
+    if (!opt_bidir) {
+        return 0;
+    }
+
+    index = find_buffer(opt_buffer, RTT_DIRECTION_DOWN, &desc);
+    if (index < 0) {
+        fprintf(stderr, "Failed to find matching down-buffer\n");
+        return -1;
+    } else {
+        printf("Using down-buffer #%d (size=%d)\n", index, desc.size);
+        *index_down = index;
+    }
+
+    return 0;
 }
 
 static int open_pty(void)
 {
+    struct termios tio;
     int fdm;
 
-    fdm = posix_openpt(O_WRONLY);
+    if (opt_bidir) {
+        fdm = posix_openpt(O_RDWR);
+    } else {
+        fdm = posix_openpt(O_WRONLY);
+    }
     if (!fdm) {
         perror("Failed to open pty");
         return -1;
+    }
+
+    if (tcgetattr(fdm, &tio) == 0) {
+        tio.c_lflag &= ~ECHO;
+        tcsetattr(fdm, TCSAFLUSH, &tio);
     }
 
     if (grantpt(fdm) < 0) {
@@ -293,12 +325,14 @@ static int open_pty(void)
 int main(int argc, char **argv)
 {
     int pfd;
-    int idx;
+    int index_up;
+    int index_down;
+    int ret;
 
     for (;;) {
          int opt;
 
-         opt = getopt_long(argc, argv, "a:d:i:s:S:b:j:", options, NULL);
+         opt = getopt_long(argc, argv, "a:d:i:s:S:b:2j:", options, NULL);
          if (opt < 0)
              break;
 
@@ -321,6 +355,9 @@ int main(int argc, char **argv)
          case 'b':
              opt_buffer = optarg;
              break;
+         case '2':
+             opt_bidir = 1;
+             break;
          case 'j':
              opt_jlinkarm = optarg;
              break;
@@ -337,8 +374,8 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    idx = configure_rtt();
-    if (idx < 0) {
+    ret = configure_rtt(&index_up, &index_down);
+    if (ret < 0) {
         return EXIT_FAILURE;
     }
 
@@ -349,11 +386,28 @@ int main(int argc, char **argv)
 
     while (1) {
         char buf[4096];
-        int num;
 
-        num = jlink_rtterminal_read(idx, buf, sizeof(buf));
-        if (num > 0) {
-            write(pfd, buf, num);
+        ret = jlink_rtterminal_read(index_up, buf, sizeof(buf));
+        if (ret > 0) {
+            write(pfd, buf, ret);
+        } else if (opt_bidir) {
+            struct timeval tmo;
+            fd_set rfds;
+
+            tmo.tv_sec = 0;
+            tmo.tv_usec = 100;
+
+            FD_ZERO(&rfds);
+            FD_SET(pfd, &rfds);
+
+            ret = select(pfd + 1, &rfds, NULL, NULL, &tmo);
+
+            if (ret > 0 && FD_ISSET(pfd, &rfds)) {
+                ret = read(pfd, buf, sizeof(buf));
+                if (ret > 0) {
+                    jlink_rtterminal_write(index_down, buf, ret);
+                }
+            }
         } else {
             usleep(100);
         }
