@@ -37,6 +37,14 @@
 #define RTT_DIRECTION_UP            0
 #define RTT_DIRECTION_DOWN          1
 
+struct rtt_desc {
+    uint32_t index;
+    uint32_t direction;
+    char name[32];
+    uint32_t size;
+    uint32_t flags;
+};
+
 /* libjlinkarm.so exports */
 static int (* jlink_emu_selectbyusbsn) (unsigned sn);
 static int (* jlink_open) (void);
@@ -179,19 +187,44 @@ static int connect_jlink(void)
     return 0;
 }
 
+static int find_buffer(const char *name, int direction, struct rtt_desc *desc)
+{
+    int count;
+    int index;
+
+    do {
+        usleep(100);
+        count = jlink_rtterminal_control(RTT_CONTROL_GET_NUM_BUF, &direction);
+    } while (count < 0);
+
+    for (index = 0; index < count; index++) {
+        int rc;
+
+        memset(desc, 0, sizeof(*desc));
+        desc->index = index;
+        desc->direction = direction;
+
+        rc = jlink_rtterminal_control(RTT_CONTROL_GET_DESC, desc);
+        if (rc) {
+            continue;
+        }
+
+        if (desc->size > 0 && !strcmp(name, desc->name)) {
+            break;
+        }
+    }
+
+    if (index == count) {
+        return -1;
+    }
+
+    return index;
+}
+
 static int configure_rtt(void)
 {
-    int rtt_direction;
-    struct {
-        uint32_t index;
-        uint32_t dummy;
-        char name[32];
-        uint32_t size;
-        uint32_t flags;
-    } rtt_info = { };
-
-    int up_count;
-    int idx;
+    int index;
+    struct rtt_desc desc;
     char *range_size;
     char cmd[128];
 
@@ -222,39 +255,14 @@ static int configure_rtt(void)
 
     printf("Searching for RTT control block...\n");
 
-    do {
-        usleep(100);
-        rtt_direction = RTT_DIRECTION_UP;
-        up_count = jlink_rtterminal_control(RTT_CONTROL_GET_NUM_BUF, &rtt_direction);
-    } while (up_count < 0);
-
-    printf("Found %d up-buffers.\n", up_count);
-
-    for (idx = 0; idx < up_count; idx++) {
-        int rc;
-
-        memset(&rtt_info, 0, sizeof(rtt_info));
-        rtt_info.index = idx;
-
-        rc = jlink_rtterminal_control(RTT_CONTROL_GET_DESC, &rtt_info);
-        if (rc) {
-            fprintf(stderr, "Failed to get information for up-buffer #%d\n", up_count);
-            continue;
-        }
-
-        if (rtt_info.size > 0 && !strcmp(opt_buffer, rtt_info.name)) {
-            break;
-        }
+    index = find_buffer(opt_buffer, RTT_DIRECTION_UP, &desc);
+    if (index < 0) {
+        fprintf(stderr, "Failed to find matching up-buffer\n");
+    } else {
+        printf("Using buffer #%d (size=%d)\n", index, desc.size);
     }
 
-    if (idx == up_count) {
-        fprintf(stderr, "Failed to find proper up-buffer\n");
-        return -1;
-    }
-
-    printf("Using buffer #%d (size=%d)\n", idx, rtt_info.size);
-
-    return idx;
+    return index;
 }
 
 static int open_pty(void)
