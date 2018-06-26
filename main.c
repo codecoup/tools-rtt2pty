@@ -23,12 +23,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <getopt.h>
 #include <termios.h>
 #include <sys/select.h>
+#include <signal.h>
 
 #define RTT_CONTROL_START           0
 #define RTT_CONTROL_STOP            1
@@ -322,6 +324,13 @@ static int open_pty(void)
     return fdm;
 }
 
+static bool do_exit = false;
+
+static void sig_handler(int signum)
+{
+    do_exit = true;
+}
+
 int main(int argc, char **argv)
 {
     int pfd;
@@ -384,7 +393,11 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    while (1) {
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+    signal(SIGQUIT, sig_handler);
+
+    while (!do_exit) {
         char buf[4096];
 
         ret = jlink_rtterminal_read(index_up, buf, sizeof(buf));
