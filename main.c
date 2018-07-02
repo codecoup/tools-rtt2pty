@@ -78,7 +78,7 @@ static const char *opt_address = NULL;
 static const char *opt_device = "nrf52";
 static int opt_if = 1; // SWD
 static unsigned opt_speed = 4000;
-static const char *opt_buffer = "monitor";
+static const char *opt_buffer = "Terminal";
 static int opt_bidir = 0;
 static const char *opt_jlinkarm = NULL;
 
