@@ -70,6 +70,7 @@ static const struct option options[] = {
     { "buffer",   required_argument, NULL, 'b' },
     { "bidir",    required_argument, NULL, '2' },
     { "jlinkarm", required_argument, NULL, 'j' },
+    { "help",     no_argument,       NULL, 'h' },
     { }
 };
 
@@ -81,6 +82,7 @@ static unsigned opt_speed = 4000;
 static const char *opt_buffer = "Terminal";
 static int opt_bidir = 0;
 static const char *opt_jlinkarm = NULL;
+static int opt_help = 0;
 
 static void *try_dlopen_jlinkarm(void)
 {
@@ -341,7 +343,7 @@ int main(int argc, char **argv)
     for (;;) {
          int opt;
 
-         opt = getopt_long(argc, argv, "a:d:i:s:S:b:2j:", options, NULL);
+         opt = getopt_long(argc, argv, "a:d:i:s:S:b:2:j:h:", options, NULL);
          if (opt < 0)
              break;
 
@@ -370,9 +372,26 @@ int main(int argc, char **argv)
          case 'j':
              opt_jlinkarm = optarg;
              break;
+         case 'h':
+             opt_help = 1;
+             break;
          default:
              return EXIT_FAILURE;
          }
+    }
+
+    if (opt_help) {
+        printf("rtt2pty: Segger RTT to PTY bridge\n");
+        printf("rtt2pty [-opt <param>]\n");
+        printf("\nOptions:\n");
+        printf("\t-d <s>            Segger device ID\n");
+        printf("\t-i <swd:jtag>     Interface\n");
+        printf("\t-s <n>            J-Link serial number\n");
+        printf("\t-S <n>            SWD/JTAG speed\n");
+        printf("\t-b <n>            Buffer\n");
+        printf("\t-2 <0:1>          Bi-dir comms\n");
+        printf("\t-j <s>            libjlinkarm.so/dylib location\n");
+        return EXIT_SUCCESS;
     }
 
     if (load_jlinkarm() < 0) {
