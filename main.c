@@ -384,13 +384,12 @@ int main(int argc, char **argv)
         printf("rtt2pty: Segger RTT to PTY bridge\n");
         printf("rtt2pty [-opt <param>]\n");
         printf("\nOptions:\n");
-        printf("\t-d <s>            Segger device ID\n");
-        printf("\t-i <swd:jtag>     Interface\n");
-        printf("\t-s <n>            J-Link serial number\n");
-        printf("\t-S <n>            SWD/JTAG speed\n");
-        printf("\t-b <n>            Buffer\n");
-        printf("\t-2 <0:1>          Bi-dir comms\n");
-        printf("\t-j <s>            libjlinkarm.so/dylib location\n");
+        printf("\t-d <devname>      Segger device name\n");
+        printf("\t-s <serial>       J-Link serial number\n");
+        printf("\t-S <speed>        SWD/JTAG speed\n");
+        printf("\t-b <name>         Buffer name\n");
+        printf("\t-2                Enable bi-directional comms\n");
+        printf("\t-j <filename>     libjlinkarm.so/dylib location\n");
         return EXIT_SUCCESS;
     }
 
