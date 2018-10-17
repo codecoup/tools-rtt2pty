@@ -68,7 +68,7 @@ static const struct option options[] = {
     { "sn",       required_argument, NULL, 's' },
     { "speed",    required_argument, NULL, 'S' },
     { "buffer",   required_argument, NULL, 'b' },
-    { "bidir",    required_argument, NULL, '2' },
+    { "bidir",    no_argument,       NULL, '2' },
     { "jlinkarm", required_argument, NULL, 'j' },
     { "help",     no_argument,       NULL, 'h' },
     { }
@@ -343,7 +343,7 @@ int main(int argc, char **argv)
     for (;;) {
          int opt;
 
-         opt = getopt_long(argc, argv, "a:d:i:s:S:b:2:j:h:", options, NULL);
+         opt = getopt_long(argc, argv, "a:d:i:s:S:b:2j:h:", options, NULL);
          if (opt < 0)
              break;
 
