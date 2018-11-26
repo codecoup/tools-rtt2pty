@@ -71,6 +71,7 @@ static const struct option options[] = {
     { "bidir",    no_argument,       NULL, '2' },
     { "jlinkarm", required_argument, NULL, 'j' },
     { "help",     no_argument,       NULL, 'h' },
+    { "link",     required_argument, NULL, 'l' },
     { }
 };
 
@@ -80,6 +81,7 @@ static const char *opt_device = "nrf52";
 static int opt_if = 1; // SWD
 static unsigned opt_speed = 4000;
 static const char *opt_buffer = "Terminal";
+static const char *opt_link = NULL;
 static int opt_bidir = 0;
 static const char *opt_jlinkarm = NULL;
 static int opt_help = 0;
@@ -323,6 +325,15 @@ static int open_pty(void)
 
     printf("PTY name is %s\n", ptsname(fdm));
 
+    if (opt_link != NULL) {
+        if (symlink(ptsname(fdm), opt_link) < 0) {
+            perror("Failed to create symlink");
+            return -1;
+        }
+
+        printf("Created a symlink %s -> %s\n", opt_link, ptsname(fdm));
+    }
+
     return fdm;
 }
 
@@ -343,7 +354,7 @@ int main(int argc, char **argv)
     for (;;) {
          int opt;
 
-         opt = getopt_long(argc, argv, "a:d:i:s:S:b:2j:h:", options, NULL);
+         opt = getopt_long(argc, argv, "a:d:i:l:s:S:b:2j:h:", options, NULL);
          if (opt < 0)
              break;
 
@@ -356,6 +367,9 @@ int main(int argc, char **argv)
              break;
          case 'i':
              // TODO: not yet supported...
+             break;
+         case 'l':
+             opt_link = optarg;
              break;
          case 's':
              opt_sn = atoi(optarg);
@@ -442,6 +456,11 @@ int main(int argc, char **argv)
         } else {
             usleep(100);
         }
+    }
+
+    if (opt_link != NULL && remove(opt_link) < 0) {
+        perror("Failed to remove symlink");
+        return -1;
     }
 
     return EXIT_SUCCESS;
