@@ -159,7 +159,7 @@ static int connect_jlink(void)
     char buf[1024];
 
     if (opt_sn) {
-        if (jlink_emu_selectbyusbsn(opt_sn)) {
+        if (jlink_emu_selectbyusbsn(opt_sn) < 0) {
             fprintf(stderr, "Failed to select emu\n");
             return -1;
         }
