@@ -98,15 +98,14 @@ static void *try_dlopen_jlinkarm(void)
     void *so = NULL;
     int i, j;
 
-    for (i = 0; i < sizeof(dir) / sizeof(dir[0]); i++) {
-        for (j = 0; j < sizeof(file) / sizeof(file[0]); j++) {
+    for (i = 0; so == NULL && i < sizeof(dir) / sizeof(dir[0]); i++) {
+        for (j = 0; so == NULL && j < sizeof(file) / sizeof(file[0]); j++) {
             snprintf(fname, sizeof(fname), "%s/%s", dir[i], file[j]);
             fname[sizeof(fname) - 1] = '\0';
 
             so = dlopen(fname, RTLD_LAZY);
             if (so) {
                 printf("Using jlinkarm found at %s\n", fname);
-                break;
             }
         }
     }
