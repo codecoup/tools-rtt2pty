@@ -322,6 +322,7 @@ static int open_pty(void)
     }
 
     printf("PTY name is %s\n", ptsname(fdm));
+    fflush(stdout);
 
     return fdm;
 }
