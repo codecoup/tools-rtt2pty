@@ -323,6 +323,7 @@ static int open_pty(void)
     }
 
     printf("PTY name is %s\n", ptsname(fdm));
+    fflush(stdout);
 
     if (opt_link != NULL) {
         if (symlink(ptsname(fdm), opt_link) < 0) {
