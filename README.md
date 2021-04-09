@@ -32,6 +32,7 @@ Options:
        -b <name>         Buffer name
        -2                Enable bi-directional comms
        -j <filename>     libjlinkarm.so/dylib location
+       -p                Print list of available buffers
 ```
 
 ### Device Name (`-d <devname>`)
@@ -52,6 +53,38 @@ you run `JLinkExe`.
 
 By default, the tool only allows communication in one direction (target to PC).
 Setting the `-2` flag allows communication in both directions.
+
+### Buffer name (`-b`)
+
+Print available buffers with `-p`:
+
+```
+$ ./rtt2pty -p
+Connected to:
+  #################
+  S/N: ############
+Searching for RTT control block...
+Up-buffers:
+0 Terminal (size=4096)
+1 Logger (size=1024)
+2 btmonitor (size=1024)
+Down-buffers:
+0 Terminal (size=16)
+1 Terminal (size=0)
+2 Terminal (size=0)
+```
+
+Then open PTY to the selected buffer:
+
+```
+$ ./rtt2pty -b btmonitor
+Connected to:
+  #################
+  S/N: ############
+Searching for RTT control block...
+Using up-buffer #2 (size=1024)
+PTY name is /dev/pts/6
+```
 
 ## Example
 
