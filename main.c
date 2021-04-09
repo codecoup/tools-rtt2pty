@@ -56,6 +56,7 @@ static int (* jlink_execcommand) (char *in, char *out, int size);
 static int (* jlink_tif_select) (int);
 static void (* jlink_setspeed) (long int speed);
 static int (* jlink_connect) (void);
+static int (* jlink_close) (void);
 static unsigned (* jlink_getsn) (void);
 static void (* jlink_emu_getproductname) (char *out, int size);
 static int (*jlink_rtterminal_control) (int cmd, void *data);
@@ -85,6 +86,7 @@ static const char *opt_link = NULL;
 static int opt_bidir = 0;
 static const char *opt_jlinkarm = NULL;
 static int opt_help = 0;
+static int opt_printbufs = 0;
 
 static void *try_dlopen_jlinkarm(void)
 {
@@ -136,6 +138,7 @@ static int load_jlinkarm(void)
     jlink_tif_select = dlsym(so, "JLINK_TIF_Select");
     jlink_setspeed = dlsym(so, "JLINK_SetSpeed");
     jlink_connect = dlsym(so, "JLINK_Connect");
+    jlink_close = dlsym(so, "JLINK_Close");
     jlink_getsn = dlsym(so, "JLINK_GetSN");
     jlink_emu_getproductname = dlsym(so, "JLINK_EMU_GetProductName");
     jlink_rtterminal_control = dlsym(so, "JLINK_RTTERMINAL_Control");
@@ -197,6 +200,30 @@ static int connect_jlink(void)
     printf("  S/N: %u\n", sn);
 
     return 0;
+}
+
+static void print_buffers(int direction)
+{
+    struct rtt_desc *desc;
+    int count;
+    int index;
+
+    do {
+        usleep(100);
+        count = jlink_rtterminal_control(RTT_CONTROL_GET_NUM_BUF, &direction);
+    } while (count < 0);
+
+    for (index = 0; index < count; index++) {
+        int rc;
+        desc->index = index;
+        desc->direction = direction;
+
+        rc = jlink_rtterminal_control(RTT_CONTROL_GET_DESC, desc);
+        if (rc) {
+            continue;
+        }
+        printf("%d %s (size=%d)\n", desc->index, desc->name, desc->size);
+    }
 }
 
 static int find_buffer(const char *name, int direction, struct rtt_desc *desc)
@@ -354,7 +381,7 @@ int main(int argc, char **argv)
     for (;;) {
          int opt;
 
-         opt = getopt_long(argc, argv, "a:d:i:l:s:S:b:2j:h:", options, NULL);
+         opt = getopt_long(argc, argv, "a:d:i:l:ps:S:b:2j:h:", options, NULL);
          if (opt < 0)
              break;
 
@@ -370,6 +397,9 @@ int main(int argc, char **argv)
              break;
          case 'l':
              opt_link = optarg;
+             break;
+         case 'p':
+             opt_printbufs = 1;
              break;
          case 's':
              opt_sn = atoi(optarg);
@@ -404,6 +434,7 @@ int main(int argc, char **argv)
         printf("\t-b <name>         Buffer name\n");
         printf("\t-2                Enable bi-directional comms\n");
         printf("\t-j <filename>     libjlinkarm.so/dylib location\n");
+        printf("\t-p                Print list of available buffers\n");
         return EXIT_SUCCESS;
     }
 
@@ -418,6 +449,16 @@ int main(int argc, char **argv)
     ret = configure_rtt(&index_up, &index_down);
     if (ret < 0) {
         return EXIT_FAILURE;
+    }
+
+    if (opt_printbufs)
+    {
+        printf("Up-buffers:\n");
+        print_buffers(RTT_DIRECTION_UP);
+        printf("Down-buffers:\n");
+        print_buffers(RTT_DIRECTION_DOWN);
+        jlink_close();
+        return EXIT_SUCCESS;
     }
 
     pfd = open_pty();
