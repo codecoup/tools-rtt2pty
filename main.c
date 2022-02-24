@@ -210,7 +210,7 @@ static int connect_jlink(void)
 
 static void print_buffers(int direction)
 {
-    struct rtt_desc *desc;
+    struct rtt_desc desc;
     int count;
     int index;
 
@@ -221,14 +221,15 @@ static void print_buffers(int direction)
 
     for (index = 0; index < count; index++) {
         int rc;
-        desc->index = index;
-        desc->direction = direction;
 
-        rc = jlink_rtterminal_control(RTT_CONTROL_GET_DESC, desc);
+        desc.index = index;
+        desc.direction = direction;
+
+        rc = jlink_rtterminal_control(RTT_CONTROL_GET_DESC, &desc);
         if (rc) {
             continue;
         }
-        printf("%d %s (size=%d)\n", desc->index, desc->name, desc->size);
+        printf("  #%d %s (size=%d)\n", desc.index, desc.name, desc.size);
     }
 }
 
@@ -470,8 +471,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    if (opt_printbufs)
-    {
+    if (opt_printbufs) {
         printf("Up-buffers:\n");
         print_buffers(RTT_DIRECTION_UP);
         printf("Down-buffers:\n");
