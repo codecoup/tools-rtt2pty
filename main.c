@@ -267,10 +267,8 @@ static int find_buffer(const char *name, int direction, struct rtt_desc *desc)
     return index;
 }
 
-static int configure_rtt(int *index_up, int *index_down)
+static int configure_rtt(void)
 {
-    int index;
-    struct rtt_desc desc;
     char *range_size;
     char cmd[128];
 
@@ -299,7 +297,22 @@ static int configure_rtt(int *index_up, int *index_down)
         return -1;
     }
 
-    printf("Searching for RTT control block...\n");
+    return 0;
+}
+
+static void cleanup_jlink(void)
+{
+    if (jlink_opened) {
+        if (jlink_close()) {
+            fprintf(stderr, "Failed to close J-Link\n");
+        }
+    }
+}
+
+static int find_buffers(int *index_up, int *index_down)
+{
+    struct rtt_desc desc;
+    int index;
 
     index = find_buffer(opt_buffer, RTT_DIRECTION_UP, &desc);
     if (index < 0) {
@@ -324,15 +337,6 @@ static int configure_rtt(int *index_up, int *index_down)
     }
 
     return 0;
-}
-
-static void cleanup_jlink(void)
-{
-    if (jlink_opened) {
-        if (jlink_close()) {
-            fprintf(stderr, "Failed to close J-Link\n");
-        }
-    }
 }
 
 static int open_pty(void)
@@ -465,11 +469,13 @@ int main(int argc, char **argv)
     signal(SIGTERM, sig_handler);
     signal(SIGQUIT, sig_handler);
 
-    ret = configure_rtt(&index_up, &index_down);
+    ret = configure_rtt();
     if (ret < 0) {
         cleanup_jlink();
         return EXIT_FAILURE;
     }
+
+    printf("Searching for RTT control block...\n");
 
     if (opt_printbufs) {
         printf("Up-buffers:\n");
@@ -478,6 +484,12 @@ int main(int argc, char **argv)
         print_buffers(RTT_DIRECTION_DOWN);
         cleanup_jlink();
         return EXIT_SUCCESS;
+    }
+
+    ret = find_buffers(&index_up, &index_down);
+    if (ret < 0) {
+        cleanup_jlink();
+        return EXIT_FAILURE;
     }
 
     pfd = open_pty();
