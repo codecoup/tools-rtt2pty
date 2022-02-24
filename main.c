@@ -88,6 +88,10 @@ static const char *opt_jlinkarm = NULL;
 static int opt_help = 0;
 static int opt_printbufs = 0;
 
+static bool jlink_opened = false;
+
+static bool do_exit = false;
+
 static void *try_dlopen_jlinkarm(void)
 {
     static const char *dir[] = {
@@ -174,6 +178,8 @@ static int connect_jlink(void)
         return -1;
     }
 
+    jlink_opened = true;
+
     snprintf(buf, sizeof(buf), "device=%s", opt_device);
     if (jlink_execcommand(buf, NULL, 0)) {
         fprintf(stderr, "Failed to setup J-Link\n");
@@ -211,7 +217,7 @@ static void print_buffers(int direction)
     do {
         usleep(100);
         count = jlink_rtterminal_control(RTT_CONTROL_GET_NUM_BUF, &direction);
-    } while (count < 0);
+    } while (!do_exit && (count < 0));
 
     for (index = 0; index < count; index++) {
         int rc;
@@ -234,7 +240,7 @@ static int find_buffer(const char *name, int direction, struct rtt_desc *desc)
     do {
         usleep(100);
         count = jlink_rtterminal_control(RTT_CONTROL_GET_NUM_BUF, &direction);
-    } while (count < 0);
+    } while (!do_exit && (count < 0));
 
     for (index = 0; index < count; index++) {
         int rc;
@@ -319,6 +325,15 @@ static int configure_rtt(int *index_up, int *index_down)
     return 0;
 }
 
+static void cleanup_jlink(void)
+{
+    if (jlink_opened) {
+        if (jlink_close()) {
+            fprintf(stderr, "Failed to close J-Link\n");
+        }
+    }
+}
+
 static int open_pty(void)
 {
     struct termios tio;
@@ -363,8 +378,6 @@ static int open_pty(void)
 
     return fdm;
 }
-
-static bool do_exit = false;
 
 static void sig_handler(int signum)
 {
@@ -443,11 +456,17 @@ int main(int argc, char **argv)
     }
 
     if (connect_jlink() < 0) {
+        cleanup_jlink();
         return EXIT_FAILURE;
     }
 
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+    signal(SIGQUIT, sig_handler);
+
     ret = configure_rtt(&index_up, &index_down);
     if (ret < 0) {
+        cleanup_jlink();
         return EXIT_FAILURE;
     }
 
@@ -457,18 +476,15 @@ int main(int argc, char **argv)
         print_buffers(RTT_DIRECTION_UP);
         printf("Down-buffers:\n");
         print_buffers(RTT_DIRECTION_DOWN);
-        jlink_close();
+        cleanup_jlink();
         return EXIT_SUCCESS;
     }
 
     pfd = open_pty();
     if (pfd < 0) {
+        cleanup_jlink();
         return EXIT_FAILURE;
     }
-
-    signal(SIGINT, sig_handler);
-    signal(SIGTERM, sig_handler);
-    signal(SIGQUIT, sig_handler);
 
     while (!do_exit) {
         char buf[4096];
@@ -498,6 +514,8 @@ int main(int argc, char **argv)
             usleep(100);
         }
     }
+
+    cleanup_jlink();
 
     if (opt_link != NULL && remove(opt_link) < 0) {
         perror("Failed to remove symlink");
