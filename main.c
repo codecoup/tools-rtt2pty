@@ -349,7 +349,7 @@ static int open_pty(void)
     } else {
         fdm = posix_openpt(O_WRONLY);
     }
-    if (!fdm) {
+    if (fdm < 0) {
         perror("Failed to open pty");
         return -1;
     }
@@ -360,11 +360,13 @@ static int open_pty(void)
     }
 
     if (grantpt(fdm) < 0) {
+        close(fdm);
         perror("Failed to configure pty");
         return -1;
     }
 
     if (unlockpt(fdm) < 0) {
+        close(fdm);
         perror("Failed to unlock pty");
         return -1;
     }
@@ -374,6 +376,7 @@ static int open_pty(void)
 
     if (opt_link != NULL) {
         if (symlink(ptsname(fdm), opt_link) < 0) {
+            close(fdm);
             perror("Failed to create symlink");
             return -1;
         }
@@ -531,8 +534,9 @@ int main(int argc, char **argv)
 
     if (opt_link != NULL && remove(opt_link) < 0) {
         perror("Failed to remove symlink");
-        return -1;
     }
+
+    close(pfd);
 
     return EXIT_SUCCESS;
 }
